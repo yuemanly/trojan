@@ -12,7 +12,7 @@ while [[ $# > 0 ]];do
     case $KEY in
         -v|--version)
         INSTALL_VERSION="$2"
-        echo -e "prepare install $INSTALL_VERSION version..\n"
+        echo -e "准备安装 $INSTALL_VERSION 版本..\n"
         shift
         ;;
         -g|--go)
@@ -37,17 +37,17 @@ function prompt() {
 }
 
 if [[ $(id -u) != 0 ]]; then
-    echo Please run this script as root.
+    echo 请使用root用户运行此脚本.
     exit 1
 fi
 
 ARCH=$(uname -m 2> /dev/null)
 if [[ $ARCH != x86_64 && $ARCH != aarch64 ]];then
-    echo "not support $ARCH machine".
+    echo "不支持 $ARCH 架构的机器".
     exit 1
 fi
 if [[ $TYPE == 0 && $ARCH != x86_64 ]];then
-    echo "trojan not support $ARCH machine"
+    echo "trojan不支持 $ARCH 架构的机器"
     exit 1
 fi
 
@@ -61,7 +61,7 @@ if [[ -z $INSTALL_VERSION ]];then
     VERSION=$(curl -H 'Cache-Control: no-cache' -s "$CHECKVERSION" | grep 'tag_name' | cut -d\" -f4 | sed 's/v//g' | head -n 1)
 else
     if [[ -z `curl -H 'Cache-Control: no-cache' -s "$CHECKVERSION"|grep 'tag_name'|grep $INSTALL_VERSION` ]];then
-        echo "no $INSTALL_VERSION version file!"
+        echo "没有找到 $INSTALL_VERSION 版本!"
         exit 1
     fi
     VERSION=`echo "$INSTALL_VERSION"|sed 's/v//g'`
@@ -82,16 +82,16 @@ BINARYPATH="$INSTALLPREFIX/$NAME"
 CONFIGPATH="/usr/local/etc/$NAME/config.json"
 SYSTEMDPATH="$SYSTEMDPREFIX/$NAME.service"
 
-echo Creating $NAME install directory
+echo 创建 $NAME 安装目录
 mkdir -p $INSTALLPREFIX /usr/local/etc/$NAME
 
-echo Entering temp directory $TMPDIR...
+echo 进入临时目录 $TMPDIR...
 cd "$TMPDIR"
 
-echo Downloading $NAME $VERSION...
+echo 下载 $NAME $VERSION...
 curl -LO --progress-bar "$DOWNLOADURL" || wget -q --show-progress "$DOWNLOADURL"
 
-echo Unpacking $NAME $VERSION...
+echo 解压 $NAME $VERSION...
 if [[ $TYPE == 0 ]];then
     tar xf "$TARBALL"
     cd "$NAME"
@@ -109,18 +109,18 @@ else
     mv trojan-go trojan
 fi
 
-echo Installing $NAME $VERSION to $BINARYPATH...
+echo 安装 $NAME $VERSION 到 $BINARYPATH...
 install -Dm755 "$NAME" "$BINARYPATH"
 
-echo Installing $NAME server config to $CONFIGPATH...
-if ! [[ -f "$CONFIGPATH" ]] || prompt "The server config already exists in $CONFIGPATH, overwrite?"; then
+echo 安装 $NAME 服务器配置到 $CONFIGPATH...
+if ! [[ -f "$CONFIGPATH" ]] || prompt "服务器配置已存在于 $CONFIGPATH, 是否覆盖?"; then
     cat > "$CONFIGPATH" << EOF
 {
     "run_type": "server",
     "local_addr": "0.0.0.0",
     "local_port": 443,
-    "remote_addr": "127.0.0.1",
-    "remote_port": 80,
+    "remote_addr": "www.bing.com",
+    "remote_port": 443,
     "password": [
         "password1",
         "password2"
@@ -136,9 +136,6 @@ if ! [[ -f "$CONFIGPATH" ]] || prompt "The server config already exists in $CONF
         "alpn": [
             "http/1.1"
         ],
-        "alpn_port_override": {
-            "h2": 81
-        },
         "reuse_session": true,
         "session_ticket": false,
         "session_timeout": 600,
@@ -168,11 +165,11 @@ if ! [[ -f "$CONFIGPATH" ]] || prompt "The server config already exists in $CONF
 }
 EOF
 else
-    echo Skipping installing $NAME server config...
+    echo 跳过安装 $NAME 服务器配置...
 fi
 
 if [[ -d "$SYSTEMDPREFIX" ]]; then
-    echo Installing $NAME systemd service to $SYSTEMDPATH...
+    echo 安装 $NAME systemd 服务到 $SYSTEMDPATH...
     [[ $TYPE == 1 ]] && { NAME="trojan-go"; FLAG="-config"; }
     cat > "$SYSTEMDPATH" << EOF
 [Unit]
@@ -190,11 +187,11 @@ RestartSec=3s
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo Reloading systemd daemon...
+    echo 重新加载 systemd daemon...
     systemctl daemon-reload
 fi
 
-echo Deleting temp directory $TMPDIR...
+echo 删除临时目录 $TMPDIR...
 rm -rf "$TMPDIR"
 
-echo Done!
+echo 完成!
