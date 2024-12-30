@@ -112,7 +112,6 @@ func InstallTls() {
 		if !util.IsExists("/root/.acme.sh/acme.sh") {
 			util.RunWebShell("https://get.acme.sh")
 		}
-		util.SystemctlStop("trojan-web")
 		util.OpenPort(80)
 		checkResult := util.ExecCommandWithResult("/root/.acme.sh/acme.sh -v|tr -cd '[0-9]'")
 		acmeVersion, _ := strconv.Atoi(checkResult)
@@ -144,7 +143,6 @@ func InstallTls() {
 		core.WriteTls(crtFile, keyFile, domain)
 	}
 	Restart()
-	util.SystemctlRestart("trojan-web")
 	fmt.Println()
 }
 

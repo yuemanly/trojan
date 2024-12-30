@@ -21,8 +21,7 @@ func ControlMenu() {
 	} else {
 		tType = "trojan"
 	}
-	menu := []string{"启动trojan", "停止trojan", "重启trojan", "查看trojan状态", "查看trojan日志", "修改trojan端口"}
-	menu = append(menu, "切换为"+tType)
+	menu := []string{"启动trojan", "停止trojan", "重启trojan", "查看trojan状态", "查看trojan日志", "修改trojan端口", "切换为" + tType}
 	switch util.LoopInput("请选择: ", menu, true) {
 	case 1:
 		Start()

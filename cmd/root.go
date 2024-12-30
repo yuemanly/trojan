@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 	"trojan/core"
 	"trojan/trojan"
 	"trojan/util"
+
+	"github.com/spf13/cobra"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -33,7 +34,6 @@ func check() {
 		core.WritePassword(nil)
 		trojan.InstallTls()
 		trojan.InstallMysql()
-		util.SystemctlRestart("trojan-web")
 	}
 }
 
@@ -44,7 +44,7 @@ exit:
 		fmt.Println()
 		fmt.Println(util.Cyan("欢迎使用trojan管理程序"))
 		fmt.Println()
-		menuList := []string{"trojan管理", "用户管理", "安装管理", "web管理", "查看配置", "生成json"}
+		menuList := []string{"trojan管理", "用户管理", "安装管理", "查看配置", "生成json"}
 		switch util.LoopInput("请选择: ", menuList, false) {
 		case 1:
 			trojan.ControlMenu()
@@ -53,10 +53,8 @@ exit:
 		case 3:
 			trojan.InstallMenu()
 		case 4:
-			trojan.WebMenu()
-		case 5:
 			trojan.UserList()
-		case 6:
+		case 5:
 			trojan.GenClientJson()
 		default:
 			break exit
