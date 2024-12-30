@@ -1,6 +1,6 @@
 # trojan
 ![](https://img.shields.io/github/v/release/yuemanly/trojan.svg) 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg?longCache=true)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 trojan多用户命令行管理程序
 
@@ -67,5 +67,11 @@ Flags:
 - 本项目是在原项目基础上的修改版本，仅保留命令行功能
 
 ## License
-本项目采用 MIT 协议开源，使用本项目时请遵守开源协议。
+本项目采用 GPL-3.0 协议开源，使用本项目时请遵守 GPL-3.0 协议。
+
+根据 GPL-3.0 协议的要求：
+1. 任何基于本项目的衍生项目必须同样采用 GPL-3.0 协议开源
+2. 任何修改后的代码版本必须开源
+3. 在代码分发时必须包含原始许可证的内容
+4. 对代码的任何修改都必须说明
 
