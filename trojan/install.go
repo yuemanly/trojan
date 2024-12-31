@@ -23,10 +23,22 @@ func InstallMenu() {
 	menu := []string{"更新trojan", "证书申请", "安装openresty", "安装mysql"}
 	switch util.LoopInput("请选择: ", menu, true) {
 	case 1:
+		// 检查是否已安装证书
+		domain := core.GetDomain()
+		if domain == "" {
+			fmt.Println("请先安装证书!")
+			return
+		}
 		InstallTrojan("")
 	case 2:
 		InstallTls()
 	case 3:
+		// 先检查是否已安装证书
+		domain := core.GetDomain()
+		if domain == "" {
+			fmt.Println("请先安装证书!")
+			return
+		}
 		InstallOpenresty()
 		// OpenResty 安装成功后再安装 Trojan
 		fmt.Println("正在安装 Trojan...")
@@ -48,6 +60,13 @@ func InstallDocker() {
 
 // InstallTrojan 安装trojan
 func InstallTrojan(version string) {
+	// 检查是否已安装证书
+	domain := core.GetDomain()
+	if domain == "" {
+		fmt.Println("请先安装证书!")
+		return
+	}
+
 	fmt.Println()
 	data := string(asset.GetAsset("trojan-install.sh"))
 	checkTrojan := util.ExecCommandWithResult("systemctl list-unit-files|grep trojan.service")
@@ -57,6 +76,16 @@ func InstallTrojan(version string) {
 	if version != "" {
 		data = strings.ReplaceAll(data, "INSTALL_VERSION=\"\"", "INSTALL_VERSION=\""+version+"\"")
 	}
+
+	// 检查是否已安装 OpenResty，如果已安装，则使用 4443 端口
+	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
+		data = strings.ReplaceAll(data, `"local_port": 443,`, `"local_port": 4443,`)
+	}
+
+	// 停止 trojan 服务（如果存在）
+	util.SystemctlStop("trojan")
+	time.Sleep(1 * time.Second)
+
 	util.ExecCommand(data)
 	util.OpenPort(443)
 	util.SystemctlRestart("trojan")
@@ -157,37 +186,9 @@ func InstallTls() {
 		fmt.Scanln(&choice)
 		if strings.ToLower(choice) == "y" {
 			InstallOpenresty()
-			// 创建域名配置文件
-			certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
-			keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
-			domainConfig := fmt.Sprintf(`server {
-    listen 80;
-    server_name %s;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name %s;
-
-    ssl_certificate %s;
-    ssl_certificate_key %s;
-    
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:50m;
-    ssl_session_tickets off;
-    
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    
-    location / {
-        root /usr/local/openresty/nginx/html;
-        index index.html index.htm;
-    }
-}`, domain, domain, certFile, keyFile)
-			util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/conf.d/%s.conf", domainConfig, domain))
-			util.SystemctlRestart("openresty")
+			// OpenResty 安装成功后再安装 Trojan
+			fmt.Println("正在安装 Trojan...")
+			InstallTrojan("")
 		}
 	}
 }
