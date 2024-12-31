@@ -25,20 +25,42 @@ download_latest() {
     fi
     
     echo "获取最新版本信息..."
-    version=$(curl -s $GITHUB_API_URL | grep "tag_name" | cut -d'"' -f4)
+    release_info=$(curl -s $GITHUB_API_URL)
+    version=$(echo "$release_info" | grep "tag_name" | cut -d'"' -f4)
     if [[ -z "$version" ]]; then
         echo "获取版本信息失败"
         exit 1
     fi
+
+    # 从 release 信息中获取正确的下载 URL
+    download_url=$(echo "$release_info" | grep -o "https://.*trojan-linux-$arch" | head -n1)
+    if [[ -z "$download_url" ]]; then
+        echo "未找到对应架构的下载链接"
+        exit 1
+    }
+
+    echo "下载 trojan $version 版本..."
+    echo "下载地址: $download_url"
     
-    download_url="https://github.com/yuemanly/trojan/releases/download/$version/trojan-linux-$arch"
-    echo "下载trojan $version 版本..."
-    curl -L $download_url -o $INSTALL_PATH
-    if [[ $? -ne 0 ]]; then
+    # 使用 wget 下载，带进度条和重试
+    if ! wget --progress=bar:force -t 3 -T 30 -O "$INSTALL_PATH.tmp" "$download_url"; then
         echo "下载失败"
+        rm -f "$INSTALL_PATH.tmp"
         exit 1
     fi
-    chmod +x $INSTALL_PATH
+
+    # 检查下载的文件是否为可执行文件
+    if [[ ! -s "$INSTALL_PATH.tmp" ]]; then
+        echo "下载的文件为空"
+        rm -f "$INSTALL_PATH.tmp"
+        exit 1
+    fi
+
+    # 移动到最终位置并设置权限
+    mv "$INSTALL_PATH.tmp" "$INSTALL_PATH"
+    chmod +x "$INSTALL_PATH"
+    
+    echo "下载完成"
 }
 
 # 安装函数
