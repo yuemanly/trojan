@@ -308,7 +308,7 @@ func InstallOpenresty() {
 
 	// 安装依赖
 	fmt.Println("正在安装依赖...")
-	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release")
+	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release psmisc")
 
 	// 添加 OpenResty 仓库
 	fmt.Println("正在添加 OpenResty 仓库...")
@@ -326,8 +326,11 @@ func InstallOpenresty() {
 		return
 	}
 
-	// 创建配置目录
+	// 清理并创建配置目录
+	fmt.Println("正在配置 OpenResty...")
+	util.ExecCommand("rm -rf /usr/local/openresty/nginx/conf/conf.d/* /etc/openresty/conf.d/*")
 	util.ExecCommand("mkdir -p /usr/local/openresty/nginx/conf/conf.d")
+	util.ExecCommand("mkdir -p /etc/openresty/conf.d")
 
 	// 修改主配置文件
 	mainConfig := fmt.Sprintf(`user root;
@@ -342,7 +345,7 @@ http {
     default_type application/octet-stream;
     sendfile on;
     keepalive_timeout 65;
-    include conf.d/*.conf;
+    include /usr/local/openresty/nginx/conf/conf.d/*.conf;
 }
 
 stream {
@@ -367,28 +370,7 @@ stream {
     listen 80;
     server_name %s;
     return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name %s;
-
-    ssl_certificate %s;
-    ssl_certificate_key %s;
-    
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:50m;
-    ssl_session_tickets off;
-    
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    
-    location / {
-        root /usr/local/openresty/nginx/html;
-        index index.html index.htm;
-    }
-}`, domain, domain, certFile, keyFile)
+}`, domain)
 
 	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/conf.d/%s.conf", domainConfig, domain))
 
@@ -399,42 +381,28 @@ server {
 		return
 	}
 
-	// 启动 OpenResty
-	fmt.Println("正在启动 OpenResty...")
-	util.SystemctlStop("openresty") // 确保先停止
-	time.Sleep(1 * time.Second)
+	// 启动服务
+	fmt.Println("正在启动服务...")
+	// 先启动 trojan
+	util.SystemctlStart("trojan")
+	time.Sleep(2 * time.Second)
+
+	// 检查 trojan 是否正确监听 4443 端口
+	if !util.IsPortOccupied("4443") {
+		fmt.Println("Trojan 未能成功监听 4443 端口!")
+		return
+	}
+
+	// 然后启动 OpenResty
 	util.SystemctlStart("openresty")
 	if !util.IsExists("/etc/systemd/system/multi-user.target.wants/openresty.service") {
 		util.SystemctlEnable("openresty")
 	}
 
-	// 等待 OpenResty 完全启动并检查状态
+	// 等待 OpenResty 完全启动
 	time.Sleep(2 * time.Second)
 	if util.ExecCommandWithResult("systemctl is-active openresty") != "active" {
 		fmt.Println("OpenResty 启动失败，请检查配置!")
-		return
-	}
-
-	// 检查 OpenResty 是否成功监听 443 端口
-	if !util.IsPortOccupied("443") {
-		fmt.Println("OpenResty 未能成功监听 443 端口!")
-		return
-	}
-
-	// 最后启动 Trojan
-	fmt.Println("正在启动 Trojan...")
-	util.SystemctlStart("trojan")
-	time.Sleep(1 * time.Second)
-
-	// 检查服务状态
-	if util.ExecCommandWithResult("systemctl is-active trojan") != "active" {
-		fmt.Println("Trojan 启动失败，请检查配置!")
-		return
-	}
-
-	// 检查 Trojan 是否成功监听 4443 端口
-	if !util.IsPortOccupied("4443") {
-		fmt.Println("Trojan 未能成功监听 4443 端口!")
 		return
 	}
 
