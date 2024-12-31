@@ -284,11 +284,14 @@ func InstallOpenresty() {
 		return
 	}
 
-	// 先修改 Trojan 端口到 4443
+	// 先停止 trojan
+	fmt.Println("正在停止 Trojan...")
+	util.SystemctlStop("trojan")
+	time.Sleep(1 * time.Second)
+
+	// 修改 Trojan 端口
 	fmt.Println("正在修改 Trojan 端口...")
-	core.SetValue("local_port", "4443")
-	util.SystemctlStop("trojan") // 先停止 trojan
-	time.Sleep(1 * time.Second)  // 等待进程完全停止
+	core.GetTrojanPort() // 这会自动设置正确的端口
 
 	// 安装依赖
 	fmt.Println("正在安装依赖...")

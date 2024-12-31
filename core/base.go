@@ -55,7 +55,11 @@ func GetDomain() string {
 // GetTrojanPort 根据是否安装了 OpenResty 返回 Trojan 应该使用的端口
 func GetTrojanPort() int {
 	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
+		SetValue("local_port", "4443")
+		SetValue("remote_port", "443")
 		return 4443
 	}
+	SetValue("local_port", "443")
+	SetValue("remote_port", "443")
 	return 443
 }
