@@ -149,7 +149,10 @@ func InstallTls() {
 
 	// 证书安装完成后，提示安装 OpenResty
 	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		if util.LoopInput("是否安装 OpenResty 作为反向代理? ", []string{"是", "否"}, true) == 1 {
+		fmt.Print("是否安装 OpenResty 作为反向代理? [y/n]: ")
+		var choice string
+		fmt.Scanln(&choice)
+		if strings.ToLower(choice) == "y" {
 			InstallOpenresty()
 			// 创建域名配置文件
 			domainConfig := fmt.Sprintf(`server {
@@ -266,6 +269,19 @@ func InstallOpenresty() {
 		return
 	}
 
+	// 获取域名和证书路径
+	domain := core.GetDomain()
+	if domain == "" {
+		fmt.Println("未找到域名配置!")
+		return
+	}
+	certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
+	keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
+	if !util.IsExists(certFile) || !util.IsExists(keyFile) {
+		fmt.Println("未找到证书文件!")
+		return
+	}
+
 	// 安装依赖
 	fmt.Println("正在安装依赖...")
 	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release")
@@ -290,7 +306,7 @@ func InstallOpenresty() {
 	util.ExecCommand("mkdir -p /etc/openresty/conf.d")
 
 	// 修改主配置文件
-	mainConfig := `user root;
+	mainConfig := fmt.Sprintf(`user root;
 worker_processes auto;
 worker_rlimit_nofile 51200;
 events {
@@ -311,14 +327,50 @@ stream {
     }
     server {
         listen 443 ssl;
-        ssl_certificate /usr/local/etc/trojan/cert.crt;
-        ssl_certificate_key /usr/local/etc/trojan/private.key;
-        ssl_preread on;
+        ssl_certificate %s;
+        ssl_certificate_key %s;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
         proxy_pass trojan;
     }
-}`
+}`, certFile, keyFile)
 
 	util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/nginx.conf", mainConfig))
+
+	// 创建域名配置文件
+	domainConfig := fmt.Sprintf(`server {
+    listen 80;
+    server_name %s;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name %s;
+
+    ssl_certificate %s;
+    ssl_certificate_key %s;
+    
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    
+    location / {
+        root /usr/local/openresty/nginx/html;
+        index index.html index.htm;
+    }
+}`, domain, domain, certFile, keyFile)
+
+	util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/conf.d/%s.conf", domainConfig, domain))
+
+	// 创建软链接
+	util.ExecCommand("ln -sf /etc/openresty/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf")
+	util.ExecCommand("ln -sf /etc/openresty/conf.d /usr/local/openresty/nginx/conf/conf.d")
 
 	// 启动 OpenResty
 	util.SystemctlStart("openresty")
