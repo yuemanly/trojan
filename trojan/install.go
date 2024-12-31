@@ -287,7 +287,7 @@ func InstallOpenresty() {
 	// 先停止 trojan
 	fmt.Println("正在停止 Trojan...")
 	util.SystemctlStop("trojan")
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// 修改 Trojan 端口
 	fmt.Println("正在修改 Trojan 端口...")
@@ -382,14 +382,27 @@ server {
 	// 启动 OpenResty
 	fmt.Println("正在启动 OpenResty...")
 	util.SystemctlStart("openresty")
-	util.SystemctlEnable("openresty")
+	if !util.IsExists("/etc/systemd/system/multi-user.target.wants/openresty.service") {
+		util.SystemctlEnable("openresty")
+	}
 
-	// 等待 OpenResty 完全启动
+	// 等待 OpenResty 完全启动并检查状态
 	time.Sleep(2 * time.Second)
+	if util.ExecCommandWithResult("systemctl is-active openresty") != "active" {
+		fmt.Println("OpenResty 启动失败，请检查配置!")
+		return
+	}
 
 	// 最后启动 Trojan
 	fmt.Println("正在启动 Trojan...")
 	util.SystemctlStart("trojan")
+	time.Sleep(1 * time.Second)
+
+	// 检查服务状态
+	if util.ExecCommandWithResult("systemctl is-active trojan") != "active" {
+		fmt.Println("Trojan 启动失败，请检查配置!")
+		return
+	}
 
 	fmt.Println("OpenResty 安装成功!")
 	fmt.Println("Trojan 端口已切换至 4443")
