@@ -20,6 +20,7 @@ trojan多用户命令行管理程序
   - 自动端口切换（安装 OpenResty 时自动切换到 4443 端口）
   - 支持域名分流（trojan域名和其他域名分别处理）
   - 支持 HTTP/HTTPS 服务
+  - 自动配置域名和证书
 
 ## 安装方式
 *trojan使用请提前准备好服务器可用的域名*  
@@ -32,7 +33,19 @@ source <(curl -sL https://raw.githubusercontent.com/yuemanly/trojan/master/insta
 #卸载
 source <(curl -sL https://raw.githubusercontent.com/yuemanly/trojan/master/install.sh) --remove
 ```
-安装完后输入'trojan'可进入管理程序   
+
+### 安装流程
+1. 运行安装脚本后输入 `trojan` 进入管理程序
+2. 选择 "安装管理" -> "证书申请"，输入域名和邮箱
+3. 证书安装完成后，会自动提示是否安装 OpenResty
+4. 如果选择安装 OpenResty：
+   - Trojan 会自动切换到 4443 端口
+   - OpenResty 会监听 80 和 443 端口
+   - 自动配置域名的 HTTP/HTTPS 访问
+   - 自动配置 SSL 证书
+5. 如果不安装 OpenResty：
+   - Trojan 继续使用 443 端口
+   - 需要自行处理 Web 服务
 
 ## 命令行
 ```
