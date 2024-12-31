@@ -284,18 +284,22 @@ func InstallOpenresty() {
 		return
 	}
 
-	// 检查端口占用
-	if util.IsPortOccupied("443") {
-		fmt.Println("检测到443端口被占用，正在停止相关服务...")
-		util.SystemctlStop("trojan")
-		util.SystemctlStop("openresty")
-		time.Sleep(2 * time.Second)
+	// 停止所有相关服务
+	fmt.Println("正在停止所有服务...")
+	util.SystemctlStop("trojan")
+	util.SystemctlStop("openresty")
+	time.Sleep(2 * time.Second)
 
-		// 再次检查端口
-		if util.IsPortOccupied("443") {
-			fmt.Println("无法释放443端口，请检查占用进程!")
-			return
-		}
+	// 重启网络服务
+	fmt.Println("正在重启网络服务...")
+	util.ExecCommand("systemctl restart networking")
+	time.Sleep(2 * time.Second)
+
+	// 检查端口
+	if util.IsPortOccupied("443") {
+		fmt.Println("443端口仍被占用，尝试强制结束占用进程...")
+		util.ExecCommand("fuser -k 443/tcp")
+		time.Sleep(2 * time.Second)
 	}
 
 	// 修改 Trojan 端口
@@ -388,8 +392,17 @@ server {
 
 	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/conf.d/%s.conf", domainConfig, domain))
 
-	// 先启动 OpenResty
+	// 测试配置
+	fmt.Println("正在测试 OpenResty 配置...")
+	if util.ExecCommandWithResult("openresty -t") != "" {
+		fmt.Println("OpenResty 配置测试失败!")
+		return
+	}
+
+	// 启动 OpenResty
 	fmt.Println("正在启动 OpenResty...")
+	util.SystemctlStop("openresty") // 确保先停止
+	time.Sleep(1 * time.Second)
 	util.SystemctlStart("openresty")
 	if !util.IsExists("/etc/systemd/system/multi-user.target.wants/openresty.service") {
 		util.SystemctlEnable("openresty")
