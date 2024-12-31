@@ -284,6 +284,11 @@ func InstallOpenresty() {
 		return
 	}
 
+	// 先修改 Trojan 端口到 4443
+	fmt.Println("正在修改 Trojan 端口...")
+	core.SetValue("local_port", "4443")
+	util.SystemctlRestart("trojan")
+
 	// 安装依赖
 	fmt.Println("正在安装依赖...")
 	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release")
@@ -369,6 +374,10 @@ server {
 }`, domain, domain, certFile, keyFile)
 
 	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/conf.d/%s.conf", domainConfig, domain))
+
+	// 等待端口释放
+	fmt.Println("等待端口释放...")
+	time.Sleep(2 * time.Second)
 
 	// 启动 OpenResty
 	util.SystemctlStart("openresty")
