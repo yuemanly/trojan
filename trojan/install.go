@@ -155,6 +155,8 @@ func InstallTls() {
 		if strings.ToLower(choice) == "y" {
 			InstallOpenresty()
 			// 创建域名配置文件
+			certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
+			keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
 			domainConfig := fmt.Sprintf(`server {
     listen 80;
     server_name %s;
@@ -165,8 +167,8 @@ server {
     listen 443 ssl;
     server_name %s;
 
-    ssl_certificate /usr/local/etc/trojan/cert.crt;
-    ssl_certificate_key /usr/local/etc/trojan/private.key;
+    ssl_certificate %s;
+    ssl_certificate_key %s;
     
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:50m;
@@ -180,7 +182,7 @@ server {
         root /usr/local/openresty/nginx/html;
         index index.html index.htm;
     }
-}`, domain, domain)
+}`, domain, domain, certFile, keyFile)
 			util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/conf.d/%s.conf", domainConfig, domain))
 			util.SystemctlRestart("openresty")
 		}
@@ -303,7 +305,7 @@ func InstallOpenresty() {
 	}
 
 	// 创建配置目录
-	util.ExecCommand("mkdir -p /etc/openresty/conf.d")
+	util.ExecCommand("mkdir -p /usr/local/openresty/nginx/conf/conf.d")
 
 	// 修改主配置文件
 	mainConfig := fmt.Sprintf(`user root;
@@ -318,7 +320,7 @@ http {
     default_type application/octet-stream;
     sendfile on;
     keepalive_timeout 65;
-    include /etc/openresty/conf.d/*.conf;
+    include conf.d/*.conf;
 }
 
 stream {
@@ -336,7 +338,7 @@ stream {
     }
 }`, certFile, keyFile)
 
-	util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/nginx.conf", mainConfig))
+	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/nginx.conf", mainConfig))
 
 	// 创建域名配置文件
 	domainConfig := fmt.Sprintf(`server {
@@ -366,11 +368,7 @@ server {
     }
 }`, domain, domain, certFile, keyFile)
 
-	util.ExecCommand(fmt.Sprintf("echo '%s' > /etc/openresty/conf.d/%s.conf", domainConfig, domain))
-
-	// 创建软链接
-	util.ExecCommand("ln -sf /etc/openresty/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf")
-	util.ExecCommand("ln -sf /etc/openresty/conf.d /usr/local/openresty/nginx/conf/conf.d")
+	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/conf.d/%s.conf", domainConfig, domain))
 
 	// 启动 OpenResty
 	util.SystemctlStart("openresty")
