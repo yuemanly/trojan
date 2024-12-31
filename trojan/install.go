@@ -2,9 +2,7 @@ package trojan
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,39 +20,13 @@ var (
 // InstallMenu 安装目录
 func InstallMenu() {
 	fmt.Println()
-	menu := []string{"更新trojan", "证书申请", "安装openresty", "安装mysql"}
+	menu := []string{"更新trojan", "证书申请", "安装mysql"}
 	switch util.LoopInput("请选择: ", menu, true) {
 	case 1:
-		// 检查是否已安装证书
-		domain := core.GetDomain()
-		if domain == "" {
-			fmt.Println("请先安装证书!")
-			return
-		}
-		// 检查是否已安装 OpenResty
-		if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-			fmt.Println("检测到已安装 OpenResty，Trojan 将使用 4443 端口")
-		}
 		InstallTrojan("")
 	case 2:
 		InstallTls()
 	case 3:
-		// 先检查是否已安装证书
-		domain := core.GetDomain()
-		if domain == "" {
-			fmt.Println("请先安装证书!")
-			return
-		}
-		InstallOpenresty()
-		// OpenResty 安装成功后再安装 Trojan
-		fmt.Println("正在安装 Trojan...")
-		InstallTrojan("")
-	case 4:
-		// 检查是否已安装 Trojan
-		if !util.IsExists("/usr/local/etc/trojan/config.json") {
-			fmt.Println("请先安装 Trojan!")
-			return
-		}
 		InstallMysql()
 	default:
 		return
@@ -71,27 +43,6 @@ func InstallDocker() {
 
 // InstallTrojan 安装trojan
 func InstallTrojan(version string) {
-	// 检查是否已安装证书
-	domain := core.GetDomain()
-	if domain == "" {
-		fmt.Println("请先安装证书!")
-		return
-	}
-
-	// 检查证书文件是否存在
-	certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
-	keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
-	if !util.IsExists(certFile) || !util.IsExists(keyFile) {
-		fmt.Println("未找到证书文件!")
-		return
-	}
-
-	// 创建必要的目录
-	if err := os.MkdirAll("/usr/local/etc/trojan", 0755); err != nil {
-		fmt.Printf("创建配置目录失败: %v\n", err)
-		return
-	}
-
 	fmt.Println()
 	data := string(asset.GetAsset("trojan-install.sh"))
 	checkTrojan := util.ExecCommandWithResult("systemctl list-unit-files|grep trojan.service")
@@ -101,50 +52,10 @@ func InstallTrojan(version string) {
 	if version != "" {
 		data = strings.ReplaceAll(data, "INSTALL_VERSION=\"\"", "INSTALL_VERSION=\""+version+"\"")
 	}
-
-	// 检查是否已安装 OpenResty，如果已安装，则使用 4443 端口
-	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		data = strings.ReplaceAll(data, `"local_port": 443,`, `"local_port": 4443,`)
-	}
-
-	// 停止 trojan 服务（如果存在）
-	util.SystemctlStop("trojan")
-	time.Sleep(1 * time.Second)
-
 	util.ExecCommand(data)
 	util.OpenPort(443)
-
-	// 创建配置文件
-	configPath := "/usr/local/etc/trojan/config.json"
-	if !util.IsExists(configPath) {
-		// 创建基本配置
-		configData := []byte(`{
-			"run_type": "server",
-			"local_addr": "0.0.0.0",
-			"local_port": ` + func() string {
-			if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-				return "4443"
-			}
-			return "443"
-		}() + `,
-			"remote_addr": "127.0.0.1",
-			"remote_port": 80,
-			"password": [],
-			"ssl": {
-				"cert": "` + certFile + `",
-				"key": "` + keyFile + `",
-				"sni": "` + domain + `"
-			}
-		}`)
-		if err := ioutil.WriteFile(configPath, configData, 0644); err != nil {
-			fmt.Printf("写入配置文件失败: %v\n", err)
-			return
-		}
-	}
-
 	util.SystemctlRestart("trojan")
 	util.SystemctlEnable("trojan")
-	fmt.Println("Trojan 安装完成并已启动!")
 }
 
 // InstallTls 安装证书
@@ -160,7 +71,6 @@ func InstallTls() {
 		keyFile := util.Input("请输入证书的key文件路径: ", "")
 		if !util.IsExists(crtFile) || !util.IsExists(keyFile) {
 			fmt.Println("输入的cert或者key文件不存在!")
-			return
 		} else {
 			domain = util.Input("请输入此证书对应的域名: ", "")
 			if domain == "" {
@@ -232,25 +142,8 @@ func InstallTls() {
 		keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
 		core.WriteTls(crtFile, keyFile, domain)
 	}
-
-	fmt.Println("证书安装完成!")
+	Restart()
 	fmt.Println()
-
-	// 证书安装完成后，提示安装 OpenResty
-	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		fmt.Print("是否安装 OpenResty 作为反向代理? [y/n]: ")
-		var choice string
-		fmt.Scanln(&choice)
-		if strings.ToLower(choice) == "y" {
-			if err := InstallOpenresty(); err != nil {
-				fmt.Printf("OpenResty 安装失败: %v\n", err)
-				return
-			}
-			// OpenResty 安装成功后再安装 Trojan
-			fmt.Println("正在安装 Trojan...")
-			InstallTrojan("")
-		}
-	}
 }
 
 // InstallMysql 安装mysql
@@ -326,135 +219,4 @@ func InstallMysql() {
 	}
 	Restart()
 	fmt.Println()
-}
-
-// InstallOpenresty 安装openresty
-func InstallOpenresty() error {
-	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		fmt.Println("OpenResty 已安装!")
-		return nil
-	}
-
-	// 获取域名和证书路径
-	domain := core.GetDomain()
-	if domain == "" {
-		return fmt.Errorf("未找到域名配置")
-	}
-	certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
-	keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
-	if !util.IsExists(certFile) || !util.IsExists(keyFile) {
-		return fmt.Errorf("未找到证书文件")
-	}
-
-	// 停止所有相关服务
-	fmt.Println("正在停止所有服务...")
-	util.SystemctlStop("trojan")
-	util.SystemctlStop("openresty")
-	time.Sleep(2 * time.Second)
-
-	// 重启网络服务
-	fmt.Println("正在重启网络服务...")
-	util.ExecCommand("systemctl restart networking")
-	time.Sleep(2 * time.Second)
-
-	// 检查端口
-	if util.IsPortOccupied("443") {
-		fmt.Println("443端口仍被占用，尝试强制结束占用进程...")
-		util.ExecCommand("fuser -k 443/tcp")
-		time.Sleep(2 * time.Second)
-	}
-
-	// 安装依赖
-	fmt.Println("正在安装依赖...")
-	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release psmisc")
-
-	// 添加 OpenResty 仓库
-	fmt.Println("正在添加 OpenResty 仓库...")
-	util.ExecCommand("wget -O - https://openresty.org/package/pubkey.gpg | sudo apt-key add -")
-	util.ExecCommand("echo \"deb http://openresty.org/package/debian $(lsb_release -sc) openresty\" | sudo tee /etc/apt/sources.list.d/openresty.list")
-	util.ExecCommand("apt update")
-
-	// 安装 OpenResty
-	fmt.Println("正在安装 OpenResty...")
-	util.InstallPack("openresty")
-
-	// 检查安装结果
-	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		return fmt.Errorf("OpenResty 安装失败")
-	}
-
-	// 清理并创建配置目录
-	fmt.Println("正在配置 OpenResty...")
-	util.ExecCommand("rm -rf /usr/local/openresty/nginx/conf/conf.d/* /etc/openresty/conf.d/*")
-	util.ExecCommand("mkdir -p /usr/local/openresty/nginx/conf/conf.d")
-	util.ExecCommand("mkdir -p /etc/openresty/conf.d")
-
-	// 修改主配置文件
-	mainConfig := fmt.Sprintf(`user root;
-worker_processes auto;
-worker_rlimit_nofile 51200;
-events {
-    worker_connections 1024;
-}
-
-http {
-    include mime.types;
-    default_type application/octet-stream;
-    sendfile on;
-    keepalive_timeout 65;
-    include /usr/local/openresty/nginx/conf/conf.d/*.conf;
-}
-
-stream {
-    upstream trojan {
-        server 127.0.0.1:4443;
-    }
-    server {
-        listen 443 ssl;
-        ssl_certificate %s;
-        ssl_certificate_key %s;
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-        ssl_prefer_server_ciphers off;
-        proxy_pass trojan;
-    }
-}`, certFile, keyFile)
-
-	if err := os.WriteFile("/usr/local/openresty/nginx/conf/nginx.conf", []byte(mainConfig), 0644); err != nil {
-		return fmt.Errorf("写入主配置文件失败: %v", err)
-	}
-
-	// 创建域名配置文件
-	domainConfig := fmt.Sprintf(`server {
-    listen 80;
-    server_name %s;
-    return 301 https://$server_name$request_uri;
-}`, domain)
-
-	if err := os.WriteFile(fmt.Sprintf("/usr/local/openresty/nginx/conf/conf.d/%s.conf", domain), []byte(domainConfig), 0644); err != nil {
-		return fmt.Errorf("写入域名配置文件失败: %v", err)
-	}
-
-	// 测试配置
-	fmt.Println("正在测试 OpenResty 配置...")
-	result := util.ExecCommandWithResult("openresty -t 2>&1")
-	if strings.Contains(result, "failed") || strings.Contains(result, "error") {
-		return fmt.Errorf("OpenResty 配置测试失败: %s", result)
-	}
-
-	// 启动 OpenResty
-	fmt.Println("正在启动 OpenResty...")
-	util.SystemctlStart("openresty")
-	if !util.IsExists("/etc/systemd/system/multi-user.target.wants/openresty.service") {
-		util.SystemctlEnable("openresty")
-	}
-
-	// 等待 OpenResty 完全启动
-	time.Sleep(2 * time.Second)
-	if util.ExecCommandWithResult("systemctl is-active openresty") != "active" {
-		return fmt.Errorf("OpenResty 启动失败，请检查配置")
-	}
-
-	fmt.Println("OpenResty 安装成功!")
-	return nil
 }

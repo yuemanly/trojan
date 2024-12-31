@@ -41,17 +41,9 @@ func Load(path string) []byte {
 	if path == "" {
 		path = configPath
 	}
-	// 确保目录存在
-	dir := "/usr/local/etc/trojan"
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Printf("创建配置目录失败: %v\n", err)
-			return nil
-		}
-	}
 	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		fmt.Printf("读取配置文件失败: %v\n", err)
+	if err != nil {
+		fmt.Println(err)
 		return nil
 	}
 	return data
@@ -62,16 +54,8 @@ func Save(data []byte, path string) bool {
 	if path == "" {
 		path = configPath
 	}
-	// 确保目录存在
-	dir := "/usr/local/etc/trojan"
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Printf("创建配置目录失败: %v\n", err)
-			return false
-		}
-	}
 	if err := os.WriteFile(path, pretty.Pretty(data), 0644); err != nil {
-		fmt.Printf("保存配置文件失败: %v\n", err)
+		fmt.Println(err)
 		return false
 	}
 	return true
@@ -103,28 +87,7 @@ func WriteMysql(mysql *Mysql) bool {
 
 // WriteTls 写tls配置
 func WriteTls(cert, key, domain string) bool {
-	// 检查证书文件是否存在
-	if !fileExists(cert) || !fileExists(key) {
-		fmt.Println("证书文件不存在!")
-		return false
-	}
 	data := Load("")
-	if data == nil {
-		// 如果配置文件不存在，创建基本配置
-		data = []byte(`{
-			"run_type": "server",
-			"local_addr": "0.0.0.0",
-			"local_port": 443,
-			"remote_addr": "127.0.0.1",
-			"remote_port": 80,
-			"password": [],
-			"ssl": {
-				"cert": "",
-				"key": "",
-				"sni": ""
-			}
-		}`)
-	}
 	data, _ = sjson.SetBytes(data, "ssl.cert", cert)
 	data, _ = sjson.SetBytes(data, "ssl.key", key)
 	data, _ = sjson.SetBytes(data, "ssl.sni", domain)
@@ -157,10 +120,4 @@ func WriteLogLevel(level int) bool {
 	data := Load("")
 	data, _ = sjson.SetBytes(data, "log_level", level)
 	return Save(data, "")
-}
-
-// fileExists 检查文件是否存在
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

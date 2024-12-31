@@ -11,16 +11,11 @@ trojan多用户命令行管理程序
 - 启动 / 停止 / 重启 trojan 服务端
 - 支持流量统计和流量限制
 - 命令行模式管理, 支持命令补全
-- 集成acme.sh证书申请
+- 集成acme.sh证书申请(ps: 需要提前准备好域名，最好用nginx反代一下，原来80端口会被占用，现在释放出来了)
 - 生成客户端配置文件
 - 在线实时查看trojan日志
 - 在线trojan和trojan-go随时切换
 - 限制用户使用期限
-- 支持 OpenResty 反向代理（可选）
-  - 自动端口切换（安装 OpenResty 时自动切换到 4443 端口）
-  - 支持域名分流（trojan域名和其他域名分别处理）
-  - 支持 HTTP/HTTPS 服务
-  - 自动配置域名和证书
 
 ## 安装方式
 *trojan使用请提前准备好服务器可用的域名*  
@@ -33,19 +28,7 @@ source <(curl -sL https://raw.githubusercontent.com/yuemanly/trojan/master/insta
 #卸载
 source <(curl -sL https://raw.githubusercontent.com/yuemanly/trojan/master/install.sh) --remove
 ```
-
-### 安装流程
-1. 运行安装脚本后输入 `trojan` 进入管理程序
-2. 选择 "安装管理" -> "证书申请"，输入域名和邮箱
-3. 证书安装完成后，会自动提示是否安装 OpenResty
-4. 如果选择安装 OpenResty：
-   - Trojan 会自动切换到 4443 端口
-   - OpenResty 会监听 80 和 443 端口
-   - 自动配置域名的 HTTP/HTTPS 访问
-   - 自动配置 SSL 证书
-5. 如果不安装 OpenResty：
-   - Trojan 继续使用 443 端口
-   - 需要自行处理 Web 服务
+安装完后输入'trojan'可进入管理程序   
 
 ## 命令行
 ```
@@ -74,27 +57,6 @@ Available Commands:
 
 Flags:
   -h, --help   help for trojan
-```
-
-## 配置说明
-### OpenResty 配置（可选）
-1. 安装 OpenResty：
-```bash
-trojan
-# 选择 "安装管理" -> "安装openresty"
-```
-
-2. 安装后：
-- OpenResty 监听 443 端口，处理所有 HTTPS 请求
-- Trojan 自动切换到 4443 端口
-- 访问 trojan 域名时自动转发到 trojan 服务
-- 访问其他域名时由 OpenResty 处理
-
-3. 卸载 OpenResty：
-```bash
-source <(curl -sL https://raw.githubusercontent.com/yuemanly/trojan/master/install.sh) --remove
-# 选择卸载 OpenResty
-# Trojan 会自动切换回 443 端口
 ```
 
 ## 注意
