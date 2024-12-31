@@ -38,6 +38,7 @@ download_latest() {
         echo "未找到对应架构的下载链接"
         exit 1
     fi
+    
 
     echo "下载 trojan $version 版本..."
     echo "下载地址: $download_url"
