@@ -3,15 +3,68 @@
 # 检查是否为root用户
 [[ $(id -u) != 0 ]] && echo "请使用root用户运行此脚本！" && exit 1
 
-# 如果指定了--remove参数，则卸载trojan
-if [[ $1 == "--remove" ]]; then
-    systemctl stop trojan
-    systemctl disable trojan
-    rm -rf /etc/systemd/system/trojan.service
+remove() {
+    echo "开始卸载 trojan..."
+    
+    # 停止并禁用 trojan 服务
+    systemctl stop trojan || true
+    systemctl disable trojan || true
+    
+    # 删除 trojan 服务文件
+    rm -f /etc/systemd/system/trojan.service
+    rm -f /etc/systemd/system/multi-user.target.wants/trojan.service
+    rm -f /usr/lib/systemd/system/trojan.service
+    
+    # 清理 systemd 状态
+    systemctl daemon-reload
+    systemctl reset-failed
+    
+    # 询问是否卸载 OpenResty
+    read -p "是否卸载 OpenResty? [y/N] " yn
+    case $yn in
+        [Yy]* )
+            # 停止并禁用 OpenResty
+            systemctl stop openresty || true
+            systemctl disable openresty || true
+            
+            # 卸载 OpenResty
+            apt-get remove --purge -y openresty openresty-opm openresty-resty
+            apt-get autoremove -y
+            
+            # 清理 OpenResty 配置和日志
+            rm -rf /usr/local/openresty
+            rm -rf /etc/openresty
+            rm -f /etc/systemd/system/openresty.service
+            rm -f /etc/systemd/system/multi-user.target.wants/openresty.service
+            rm -f /usr/lib/systemd/system/openresty.service
+            
+            # 清理 systemd 状态
+            systemctl daemon-reload
+            systemctl reset-failed
+            
+            echo "OpenResty 已卸载"
+            ;;
+        * )
+            echo "保留 OpenResty"
+            ;;
+    esac
+    
+    # 删除 trojan 二进制文件和配置
+    rm -rf /usr/bin/trojan
     rm -rf /usr/local/etc/trojan
     rm -f /usr/local/bin/trojan
-    systemctl daemon-reload
-    echo "trojan 卸载完成!"
+    
+    # 清理系统日志
+    rm -f /var/log/trojan.log
+    journalctl --rotate
+    journalctl --vacuum-time=1s
+    
+    echo "trojan 已完全卸载"
+}
+
+# 如果指定了--remove参数，则卸载trojan
+if [[ $1 == "--remove" ]]; then
+    remove
     exit 0
 fi
 

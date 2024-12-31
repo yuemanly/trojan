@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -85,6 +86,12 @@ func InstallTrojan(version string) {
 		return
 	}
 
+	// 创建必要的目录
+	if err := os.MkdirAll("/usr/local/etc/trojan", 0755); err != nil {
+		fmt.Printf("创建配置目录失败: %v\n", err)
+		return
+	}
+
 	fmt.Println()
 	data := string(asset.GetAsset("trojan-install.sh"))
 	checkTrojan := util.ExecCommandWithResult("systemctl list-unit-files|grep trojan.service")
@@ -129,8 +136,7 @@ func InstallTrojan(version string) {
 				"sni": "` + domain + `"
 			}
 		}`)
-		err := ioutil.WriteFile(configPath, configData, 0644)
-		if err != nil {
+		if err := ioutil.WriteFile(configPath, configData, 0644); err != nil {
 			fmt.Printf("写入配置文件失败: %v\n", err)
 			return
 		}
@@ -236,12 +242,11 @@ func InstallTls() {
 		var choice string
 		fmt.Scanln(&choice)
 		if strings.ToLower(choice) == "y" {
-			InstallOpenresty()
+			if err := InstallOpenresty(); err != nil {
+				fmt.Printf("OpenResty 安装失败: %v\n", err)
+				return
+			}
 			// OpenResty 安装成功后再安装 Trojan
-			fmt.Println("正在安装 Trojan...")
-			InstallTrojan("")
-		} else {
-			// 如果不安装 OpenResty，直接安装 Trojan
 			fmt.Println("正在安装 Trojan...")
 			InstallTrojan("")
 		}
@@ -324,23 +329,21 @@ func InstallMysql() {
 }
 
 // InstallOpenresty 安装openresty
-func InstallOpenresty() {
+func InstallOpenresty() error {
 	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
 		fmt.Println("OpenResty 已安装!")
-		return
+		return nil
 	}
 
 	// 获取域名和证书路径
 	domain := core.GetDomain()
 	if domain == "" {
-		fmt.Println("未找到域名配置!")
-		return
+		return fmt.Errorf("未找到域名配置")
 	}
 	certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
 	keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
 	if !util.IsExists(certFile) || !util.IsExists(keyFile) {
-		fmt.Println("未找到证书文件!")
-		return
+		return fmt.Errorf("未找到证书文件")
 	}
 
 	// 停止所有相关服务
@@ -377,8 +380,7 @@ func InstallOpenresty() {
 
 	// 检查安装结果
 	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
-		fmt.Println("OpenResty 安装失败!")
-		return
+		return fmt.Errorf("OpenResty 安装失败")
 	}
 
 	// 清理并创建配置目录
@@ -418,7 +420,9 @@ stream {
     }
 }`, certFile, keyFile)
 
-	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/nginx.conf", mainConfig))
+	if err := os.WriteFile("/usr/local/openresty/nginx/conf/nginx.conf", []byte(mainConfig), 0644); err != nil {
+		return fmt.Errorf("写入主配置文件失败: %v", err)
+	}
 
 	// 创建域名配置文件
 	domainConfig := fmt.Sprintf(`server {
@@ -427,13 +431,15 @@ stream {
     return 301 https://$server_name$request_uri;
 }`, domain)
 
-	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/conf.d/%s.conf", domainConfig, domain))
+	if err := os.WriteFile(fmt.Sprintf("/usr/local/openresty/nginx/conf/conf.d/%s.conf", domain), []byte(domainConfig), 0644); err != nil {
+		return fmt.Errorf("写入域名配置文件失败: %v", err)
+	}
 
 	// 测试配置
 	fmt.Println("正在测试 OpenResty 配置...")
-	if util.ExecCommandWithResult("openresty -t") != "" {
-		fmt.Println("OpenResty 配置测试失败!")
-		return
+	result := util.ExecCommandWithResult("openresty -t 2>&1")
+	if strings.Contains(result, "failed") || strings.Contains(result, "error") {
+		return fmt.Errorf("OpenResty 配置测试失败: %s", result)
 	}
 
 	// 启动 OpenResty
@@ -446,9 +452,9 @@ stream {
 	// 等待 OpenResty 完全启动
 	time.Sleep(2 * time.Second)
 	if util.ExecCommandWithResult("systemctl is-active openresty") != "active" {
-		fmt.Println("OpenResty 启动失败，请检查配置!")
-		return
+		return fmt.Errorf("OpenResty 启动失败，请检查配置")
 	}
 
 	fmt.Println("OpenResty 安装成功!")
+	return nil
 }
