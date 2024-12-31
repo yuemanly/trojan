@@ -2,6 +2,7 @@ package trojan
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"runtime"
 	"strconv"
@@ -105,6 +106,7 @@ func InstallTls() {
 		keyFile := util.Input("请输入证书的key文件路径: ", "")
 		if !util.IsExists(crtFile) || !util.IsExists(keyFile) {
 			fmt.Println("输入的cert或者key文件不存在!")
+			return
 		} else {
 			domain = util.Input("请输入此证书对应的域名: ", "")
 			if domain == "" {
@@ -176,9 +178,36 @@ func InstallTls() {
 		keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
 		core.WriteTls(crtFile, keyFile, domain)
 	}
-	Restart()
-	fmt.Println()
 
+	// 确保配置文件存在
+	configPath := "/usr/local/etc/trojan/config.json"
+	if !util.IsExists(configPath) {
+		// 创建基本配置
+		configData := []byte(`{
+			"run_type": "server",
+			"local_addr": "0.0.0.0",
+			"local_port": 443,
+			"remote_addr": "127.0.0.1",
+			"remote_port": 80,
+			"password": [],
+			"ssl": {
+				"cert": "` + "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer" + `",
+				"key": "` + "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key" + `",
+				"sni": "` + domain + `"
+			}
+		}`)
+		err := ioutil.WriteFile(configPath, configData, 0644)
+		if err != nil {
+			fmt.Printf("写入配置文件失败: %v\n", err)
+			return
+		}
+	}
+
+	// 尝试重启服务
+	Restart()
+	fmt.Println("证书安装完成，服务已重启")
+
+	fmt.Println()
 	// 证书安装完成后，提示安装 OpenResty
 	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
 		fmt.Print("是否安装 OpenResty 作为反向代理? [y/n]: ")
