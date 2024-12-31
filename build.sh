@@ -9,6 +9,26 @@ fi
 
 project="yuemanly/trojan"
 
+# 手动输入版本号或使用自动检测
+read -p "请输入版本号(例如: v1.0.2，直接回车则自动检测): " input_version
+if [[ -n "$input_version" ]]; then
+    version="$input_version"
+else
+    # 检查是否存在tag
+    version=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null)
+    if [[ -z "$version" ]]; then
+        echo "错误: 没有找到git tag"
+        echo "请输入版本号或先创建一个tag: git tag v1.0.0"
+        exit 1
+    fi
+fi
+
+# 验证版本号格式
+if [[ ! $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "错误: 版本号格式不正确，应该类似 v1.0.0"
+    exit 1
+fi
+
 # 验证token是否有效
 echo "验证GitHub Token..."
 response=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -63,14 +83,6 @@ function upload() {
 }
 
 cd $shell_path
-
-# 检查是否存在tag
-version=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null)
-if [[ -z "$version" ]]; then
-	echo "错误: 没有找到git tag"
-	echo "请先创建一个tag: git tag v1.0.0"
-	exit 1
-fi
 
 # 检查tag是否已经推送到远程
 if ! git ls-remote --tags origin | grep -q "$version"; then

@@ -114,11 +114,17 @@ install -Dm755 "$NAME" "$BINARYPATH"
 
 echo 安装 $NAME 服务器配置到 $CONFIGPATH...
 if ! [[ -f "$CONFIGPATH" ]] || prompt "服务器配置已存在于 $CONFIGPATH, 是否覆盖?"; then
+    # 检查是否安装了 OpenResty
+    PORT=443
+    if [[ -f "/usr/local/openresty/nginx/sbin/nginx" ]]; then
+        PORT=4443
+    fi
+    
     cat > "$CONFIGPATH" << EOF
 {
     "run_type": "server",
     "local_addr": "0.0.0.0",
-    "local_port": 443,
+    "local_port": $PORT,
     "remote_addr": "www.bing.com",
     "remote_port": 443,
     "password": [

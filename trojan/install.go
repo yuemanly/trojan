@@ -20,7 +20,7 @@ var (
 // InstallMenu 安装目录
 func InstallMenu() {
 	fmt.Println()
-	menu := []string{"更新trojan", "证书申请", "安装mysql"}
+	menu := []string{"更新trojan", "证书申请", "安装mysql", "安装openresty"}
 	switch util.LoopInput("请选择: ", menu, true) {
 	case 1:
 		InstallTrojan("")
@@ -28,6 +28,8 @@ func InstallMenu() {
 		InstallTls()
 	case 3:
 		InstallMysql()
+	case 4:
+		InstallOpenresty()
 	default:
 		return
 	}
@@ -219,4 +221,116 @@ func InstallMysql() {
 	}
 	Restart()
 	fmt.Println()
+}
+
+// InstallOpenresty 安装openresty
+func InstallOpenresty() {
+	fmt.Println()
+	if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
+		fmt.Println("OpenResty 已经安装！")
+		return
+	}
+
+	// 获取 trojan 域名
+	domain := core.GetDomain()
+	if domain == "" {
+		fmt.Println("请先配置 trojan 域名！")
+		return
+	}
+
+	// 安装依赖
+	util.ExecCommand("apt-get update")
+	util.ExecCommand("apt-get install -y wget gnupg2 ca-certificates")
+
+	// 添加 OpenResty 官方仓库
+	util.ExecCommand("wget -O - https://openresty.org/package/pubkey.gpg | apt-key add -")
+	util.ExecCommand("echo \"deb http://openresty.org/package/debian $(lsb_release -sc) openresty\" | tee /etc/apt/sources.list.d/openresty.list")
+
+	// 安装 OpenResty
+	util.ExecCommand("apt-get update")
+	util.ExecCommand("apt-get install -y openresty")
+
+	// 创建配置目录
+	util.ExecCommand("mkdir -p /etc/openresty/conf.d")
+	util.ExecCommand("mkdir -p /etc/openresty/stream")
+
+	// 创建默认配置文件
+	defaultConfig := fmt.Sprintf(`
+worker_processes auto;
+worker_rlimit_nofile 100000;
+
+events {
+    worker_connections 20000;
+    use epoll;
+    multi_accept on;
+}
+
+# Stream 配置，用于转发 trojan 流量
+stream {
+    map $ssl_preread_server_name $backend {
+        %s        127.0.0.1:4443;
+        default   127.0.0.1:443;
+    }
+
+    server {
+        listen 443;
+        ssl_preread on;
+        proxy_pass $backend;
+    }
+}
+
+http {
+    include       mime.types;
+    include /etc/openresty/conf.d/*.conf;
+    default_type  application/octet-stream;
+
+    sendfile        on;
+    keepalive_timeout  65;
+
+    # HTTP 服务器
+    server {
+        listen 80;
+        server_name %s;
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+    }
+
+    # HTTPS 服务器（处理非 trojan 域名的 HTTPS 请求）
+    server {
+        listen 127.0.0.1:443 ssl;
+        server_name localhost;
+
+        ssl_certificate      /usr/local/etc/trojan/cert.crt;
+        ssl_certificate_key  /usr/local/etc/trojan/private.key;
+
+        ssl_session_cache    shared:SSL:1m;
+        ssl_session_timeout  5m;
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers on;
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+    }
+}`, domain, domain)
+
+	// 写入配置文件
+	util.ExecCommand(fmt.Sprintf("echo '%s' > /usr/local/openresty/nginx/conf/nginx.conf", defaultConfig))
+
+	// 启动 OpenResty
+	util.SystemctlStart("openresty")
+	util.SystemctlEnable("openresty")
+
+	// 重启 trojan 以使用新端口
+	InstallTrojan("")
+
+	fmt.Println("OpenResty 安装完成！")
+	fmt.Printf("已配置域名 %s 的流量转发：443 -> 4443\n", domain)
+	fmt.Println("如需配置其他域名，请编辑 /etc/openresty/conf.d/ 目录下的配置文件")
 }
