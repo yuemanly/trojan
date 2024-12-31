@@ -30,6 +30,10 @@ func InstallMenu() {
 			fmt.Println("请先安装证书!")
 			return
 		}
+		// 检查是否已安装 OpenResty
+		if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
+			fmt.Println("检测到已安装 OpenResty，Trojan 将使用 4443 端口")
+		}
 		InstallTrojan("")
 	case 2:
 		InstallTls()
@@ -45,6 +49,11 @@ func InstallMenu() {
 		fmt.Println("正在安装 Trojan...")
 		InstallTrojan("")
 	case 4:
+		// 检查是否已安装 Trojan
+		if !util.IsExists("/usr/local/etc/trojan/config.json") {
+			fmt.Println("请先安装 Trojan!")
+			return
+		}
 		InstallMysql()
 	default:
 		return
@@ -65,6 +74,14 @@ func InstallTrojan(version string) {
 	domain := core.GetDomain()
 	if domain == "" {
 		fmt.Println("请先安装证书!")
+		return
+	}
+
+	// 检查证书文件是否存在
+	certFile := "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer"
+	keyFile := "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key"
+	if !util.IsExists(certFile) || !util.IsExists(keyFile) {
+		fmt.Println("未找到证书文件!")
 		return
 	}
 
@@ -89,8 +106,39 @@ func InstallTrojan(version string) {
 
 	util.ExecCommand(data)
 	util.OpenPort(443)
+
+	// 创建配置文件
+	configPath := "/usr/local/etc/trojan/config.json"
+	if !util.IsExists(configPath) {
+		// 创建基本配置
+		configData := []byte(`{
+			"run_type": "server",
+			"local_addr": "0.0.0.0",
+			"local_port": ` + func() string {
+			if util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
+				return "4443"
+			}
+			return "443"
+		}() + `,
+			"remote_addr": "127.0.0.1",
+			"remote_port": 80,
+			"password": [],
+			"ssl": {
+				"cert": "` + certFile + `",
+				"key": "` + keyFile + `",
+				"sni": "` + domain + `"
+			}
+		}`)
+		err := ioutil.WriteFile(configPath, configData, 0644)
+		if err != nil {
+			fmt.Printf("写入配置文件失败: %v\n", err)
+			return
+		}
+	}
+
 	util.SystemctlRestart("trojan")
 	util.SystemctlEnable("trojan")
+	fmt.Println("Trojan 安装完成并已启动!")
 }
 
 // InstallTls 安装证书
@@ -179,35 +227,9 @@ func InstallTls() {
 		core.WriteTls(crtFile, keyFile, domain)
 	}
 
-	// 确保配置文件存在
-	configPath := "/usr/local/etc/trojan/config.json"
-	if !util.IsExists(configPath) {
-		// 创建基本配置
-		configData := []byte(`{
-			"run_type": "server",
-			"local_addr": "0.0.0.0",
-			"local_port": 443,
-			"remote_addr": "127.0.0.1",
-			"remote_port": 80,
-			"password": [],
-			"ssl": {
-				"cert": "` + "/root/.acme.sh/" + domain + "_ecc" + "/fullchain.cer" + `",
-				"key": "` + "/root/.acme.sh/" + domain + "_ecc" + "/" + domain + ".key" + `",
-				"sni": "` + domain + `"
-			}
-		}`)
-		err := ioutil.WriteFile(configPath, configData, 0644)
-		if err != nil {
-			fmt.Printf("写入配置文件失败: %v\n", err)
-			return
-		}
-	}
-
-	// 尝试重启服务
-	Restart()
-	fmt.Println("证书安装完成，服务已重启")
-
+	fmt.Println("证书安装完成!")
 	fmt.Println()
+
 	// 证书安装完成后，提示安装 OpenResty
 	if !util.IsExists("/usr/local/openresty/nginx/sbin/nginx") {
 		fmt.Print("是否安装 OpenResty 作为反向代理? [y/n]: ")
@@ -216,6 +238,10 @@ func InstallTls() {
 		if strings.ToLower(choice) == "y" {
 			InstallOpenresty()
 			// OpenResty 安装成功后再安装 Trojan
+			fmt.Println("正在安装 Trojan...")
+			InstallTrojan("")
+		} else {
+			// 如果不安装 OpenResty，直接安装 Trojan
 			fmt.Println("正在安装 Trojan...")
 			InstallTrojan("")
 		}
