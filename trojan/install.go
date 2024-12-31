@@ -20,16 +20,19 @@ var (
 // InstallMenu 安装目录
 func InstallMenu() {
 	fmt.Println()
-	menu := []string{"更新trojan", "证书申请", "安装mysql", "安装openresty"}
+	menu := []string{"更新trojan", "证书申请", "安装openresty", "安装mysql"}
 	switch util.LoopInput("请选择: ", menu, true) {
 	case 1:
 		InstallTrojan("")
 	case 2:
 		InstallTls()
 	case 3:
-		InstallMysql()
-	case 4:
 		InstallOpenresty()
+		// OpenResty 安装成功后再安装 Trojan
+		fmt.Println("正在安装 Trojan...")
+		InstallTrojan("")
+	case 4:
+		InstallMysql()
 	default:
 		return
 	}
@@ -302,10 +305,6 @@ func InstallOpenresty() {
 		time.Sleep(2 * time.Second)
 	}
 
-	// 修改 Trojan 端口
-	fmt.Println("正在修改 Trojan 端口...")
-	core.GetTrojanPort() // 这会自动设置正确的端口
-
 	// 安装依赖
 	fmt.Println("正在安装依赖...")
 	util.InstallPack("wget curl gnupg2 ca-certificates lsb-release psmisc")
@@ -381,19 +380,8 @@ stream {
 		return
 	}
 
-	// 启动服务
-	fmt.Println("正在启动服务...")
-	// 先启动 trojan
-	util.SystemctlStart("trojan")
-	time.Sleep(2 * time.Second)
-
-	// 检查 trojan 是否正确监听 4443 端口
-	if !util.IsPortOccupied("4443") {
-		fmt.Println("Trojan 未能成功监听 4443 端口!")
-		return
-	}
-
-	// 然后启动 OpenResty
+	// 启动 OpenResty
+	fmt.Println("正在启动 OpenResty...")
 	util.SystemctlStart("openresty")
 	if !util.IsExists("/etc/systemd/system/multi-user.target.wants/openresty.service") {
 		util.SystemctlEnable("openresty")
@@ -407,5 +395,4 @@ stream {
 	}
 
 	fmt.Println("OpenResty 安装成功!")
-	fmt.Println("Trojan 端口已切换至 4443")
 }
