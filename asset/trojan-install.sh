@@ -120,7 +120,7 @@ if ! [[ -f "$CONFIGPATH" ]] || prompt "服务器配置已存在于 $CONFIGPATH, 
     "run_type": "server",
     "local_addr": "0.0.0.0",
     "local_port": 443,
-    "remote_addr": "www.bing.com",
+    "remote_addr": "temp-mail.yuemanly.win",
     "remote_port": 443,
     "password": [
         "password1",
