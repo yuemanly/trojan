@@ -197,13 +197,14 @@ Description=Restart Trojan every 8 hours
 OnCalendar=*-*-* 0/8:00:00
 # 如果错过触发时间，系统启动后立即执行
 Persistent=true
+Unit=trojan.service
 
 [Install]
 WantedBy=timers.target
 EOF
 echo 重新加载 systemd daemon...
 systemctl daemon-reload
-
+systemctl restart trojan.service
 systemctl enable trojan.timer
 systemctl start trojan.timer
 
