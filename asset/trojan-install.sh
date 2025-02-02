@@ -193,14 +193,20 @@ EOF
 Description=Restart Trojan every 8 hours
 
 [Timer]
-OnCalendar=*-*-* 00/8:00:00  # 每8小时重启一次（例如 0:00, 8:00, 16:00）
-Persistent=true              # 如果错过触发时间，系统启动后立即执行
+# 每8小时重启一次（例如 0:00, 8:00, 16:00）
+OnCalendar=*-*-* 0/8:00:00
+# 如果错过触发时间，系统启动后立即执行
+Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
-    echo 重新加载 systemd daemon...
-    systemctl daemon-reload
+echo 重新加载 systemd daemon...
+systemctl daemon-reload
+
+systemctl enable trojan.timer
+systemctl start trojan.timer
+
 fi
 
 echo 删除临时目录 $TMPDIR...
