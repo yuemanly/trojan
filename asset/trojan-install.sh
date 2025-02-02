@@ -81,6 +81,7 @@ SYSTEMDPREFIX=/etc/systemd/system
 BINARYPATH="$INSTALLPREFIX/$NAME"
 CONFIGPATH="/usr/local/etc/$NAME/config.json"
 SYSTEMDPATH="$SYSTEMDPREFIX/$NAME.service"
+TIMERPATH="$SYSTEMDPREFIX/$NAME.timer"
 
 echo 创建 $NAME 安装目录
 mkdir -p $INSTALLPREFIX /usr/local/etc/$NAME
@@ -186,6 +187,17 @@ RestartSec=3s
 
 [Install]
 WantedBy=multi-user.target
+EOF
+    cat > "$TIMERPATH" << EOF
+[Unit]
+Description=Restart Trojan every 8 hours
+
+[Timer]
+OnCalendar=*-*-* 00/8:00:00  # 每8小时重启一次（例如 0:00, 8:00, 16:00）
+Persistent=true              # 如果错过触发时间，系统启动后立即执行
+
+[Install]
+WantedBy=timers.target
 EOF
     echo 重新加载 systemd daemon...
     systemctl daemon-reload
